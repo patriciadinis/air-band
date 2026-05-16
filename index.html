@@ -835,26 +835,23 @@ async function startCamera() {
     videoEl.srcObject = stream;
     videoEl.setAttribute('playsinline', '');
     videoEl.muted = true;
+    videoEl.style.position = 'absolute';
+    videoEl.style.width = '100%';
+    videoEl.style.height = '100%';
+    videoEl.style.objectFit = 'cover';
+    videoEl.style.transform = 'scaleX(-1)';
+    document.getElementById('cam-placeholder').style.display = 'none';
+    document.getElementById('webcam-container').appendChild(videoEl);
     await videoEl.play();
 
-    canvasEl = document.createElement('canvas');
-    canvasEl.width = 640;
-    canvasEl.height = 480;
-    canvasEl.style.width = '100%';
-    canvasEl.style.height = '100%';
-    canvasEl.style.objectFit = 'cover';
-    canvasEl.style.transform = 'scaleX(-1)';
-    ctxEl = canvasEl.getContext('2d');
+    await new Promise(r => { videoEl.onloadeddata = r; if (videoEl.readyState >= 2) r(); });
 
-    document.getElementById('cam-placeholder').style.display = 'none';
-    document.getElementById('webcam-container').appendChild(canvasEl);
     document.getElementById('conf-wrap').style.display = 'flex';
     document.getElementById('instrument-badge').style.opacity = '1';
     document.getElementById('status-line').textContent = 'IA ativa — faz um gesto!';
 
     btn.textContent = '● A correr em tempo real';
     running = true;
-    videoLoop();
     loop();
   } catch(e) {
     setStatus('✗ Não foi possível aceder à câmara. Confirma as permissões do browser.', 'err');
@@ -864,21 +861,12 @@ async function startCamera() {
   }
 }
 
-function videoLoop() {
-  if (!running) return;
-  ctxEl.save();
-  ctxEl.scale(-1, 1);
-  ctxEl.drawImage(videoEl, -canvasEl.width, 0, canvasEl.width, canvasEl.height);
-  ctxEl.restore();
-  requestAnimationFrame(videoLoop);
-}
-
 let predicting = false;
 function loop() {
   if (!running) return;
-  if (!predicting) {
+  if (!predicting && videoEl && videoEl.readyState >= 2) {
     predicting = true;
-    model.estimatePose(canvasEl).then(({ posenetOutput }) => {
+    model.estimatePose(videoEl).then(({ posenetOutput }) => {
       return model.predict(posenetOutput);
     }).then(preds => {
       handlePreds(preds);
@@ -902,7 +890,7 @@ function handlePreds(preds) {
   const now = Date.now();
   const isRest = !best || best === 'repouso' || best === 'idle' || best === 'rest';
 
-  if (!isRest && bestVal > 0.75) {
+  if (!isRest && bestVal > 0.50) {
     badge.textContent = best.toUpperCase();
     activateCard(best);
     if (best !== lastClass || now - lastSoundAt > COOLDOWN) {
