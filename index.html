@@ -790,7 +790,8 @@ const sounds = {
 };
 
 /* ── Teachable Machine ── */
-let model, webcam, maxPredictions;
+let model, maxPredictions;
+let videoEl, canvasEl, ctxEl;
 let running = false;
 let lastClass = null, lastSoundAt = 0;
 const COOLDOWN = 550;
@@ -828,13 +829,25 @@ async function startCamera() {
   btn.textContent = '⏳ A iniciar câmara…';
 
   try {
-    const size = 224;
-    webcam = new tmPose.Webcam(size, size, true);
-    await webcam.setup();
-    await webcam.play();
+    const stream = await navigator.mediaDevices.getUserMedia({ video: { width: 640, height: 480, facingMode: 'user' }, audio: false });
+
+    videoEl = document.createElement('video');
+    videoEl.srcObject = stream;
+    videoEl.setAttribute('playsinline', '');
+    videoEl.muted = true;
+    await videoEl.play();
+
+    canvasEl = document.createElement('canvas');
+    canvasEl.width = 640;
+    canvasEl.height = 480;
+    canvasEl.style.width = '100%';
+    canvasEl.style.height = '100%';
+    canvasEl.style.objectFit = 'cover';
+    canvasEl.style.transform = 'scaleX(-1)';
+    ctxEl = canvasEl.getContext('2d');
 
     document.getElementById('cam-placeholder').style.display = 'none';
-    document.getElementById('webcam-container').appendChild(webcam.canvas);
+    document.getElementById('webcam-container').appendChild(canvasEl);
     document.getElementById('conf-wrap').style.display = 'flex';
     document.getElementById('instrument-badge').style.opacity = '1';
     document.getElementById('status-line').textContent = 'IA ativa — faz um gesto!';
@@ -851,13 +864,17 @@ async function startCamera() {
 }
 
 async function loop() {
-  webcam.update();
+  if (!running) return;
+  ctxEl.save();
+  ctxEl.scale(-1, 1);
+  ctxEl.drawImage(videoEl, -canvasEl.width, 0, canvasEl.width, canvasEl.height);
+  ctxEl.restore();
   await predict();
-  if (running) requestAnimationFrame(loop);
+  requestAnimationFrame(loop);
 }
 
 async function predict() {
-  const { posenetOutput } = await model.estimatePose(webcam.canvas);
+  const { posenetOutput } = await model.estimatePose(canvasEl);
   const preds = await model.predict(posenetOutput);
 
   let best = null, bestVal = 0;
