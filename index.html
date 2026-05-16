@@ -854,6 +854,7 @@ async function startCamera() {
 
     btn.textContent = '● A correr em tempo real';
     running = true;
+    videoLoop();
     loop();
   } catch(e) {
     setStatus('✗ Não foi possível aceder à câmara. Confirma as permissões do browser.', 'err');
@@ -863,19 +864,31 @@ async function startCamera() {
   }
 }
 
-async function loop() {
+function videoLoop() {
   if (!running) return;
   ctxEl.save();
   ctxEl.scale(-1, 1);
   ctxEl.drawImage(videoEl, -canvasEl.width, 0, canvasEl.width, canvasEl.height);
   ctxEl.restore();
-  await predict();
-  requestAnimationFrame(loop);
+  requestAnimationFrame(videoLoop);
 }
 
-async function predict() {
-  const { posenetOutput } = await model.estimatePose(canvasEl);
-  const preds = await model.predict(posenetOutput);
+let predicting = false;
+function loop() {
+  if (!running) return;
+  if (!predicting) {
+    predicting = true;
+    model.estimatePose(canvasEl).then(({ posenetOutput }) => {
+      return model.predict(posenetOutput);
+    }).then(preds => {
+      handlePreds(preds);
+      predicting = false;
+    }).catch(e => { console.error(e); predicting = false; });
+  }
+  setTimeout(loop, 150);
+}
+
+function handlePreds(preds) {
 
   let best = null, bestVal = 0;
   preds.forEach(p => {
