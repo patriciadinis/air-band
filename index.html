@@ -12,8 +12,9 @@ body{background:#0e0e12;color:#f0ede8;font-family:'Syne',sans-serif;display:flex
 h1{font-size:2.4rem;font-weight:800;letter-spacing:-0.04em;background:linear-gradient(135deg,#f0ede8 20%,#7F77DD 70%,#D85A30);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;text-align:center}
 .sub{font-family:'Space Mono',monospace;font-size:0.65rem;color:rgba(240,237,232,0.4);text-align:center;letter-spacing:0.1em;text-transform:uppercase;margin-top:0.3rem}
 #cam-box{position:relative;border-radius:16px;overflow:hidden;border:1px solid rgba(255,255,255,0.08);background:#0a0a10;aspect-ratio:4/3;display:flex;align-items:center;justify-content:center}
-#cam-box canvas{position:absolute;inset:0;width:100%!important;height:100%!important;object-fit:cover}
-#placeholder{display:flex;flex-direction:column;align-items:center;gap:0.75rem;opacity:0.35;font-family:'Space Mono',monospace;font-size:0.75rem;text-align:center}
+#vid{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;transform:scaleX(-1)}
+#cv{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;transform:scaleX(-1)}
+#placeholder{display:flex;flex-direction:column;align-items:center;gap:0.75rem;opacity:0.35;font-family:'Space Mono',monospace;font-size:0.75rem;text-align:center;z-index:2}
 #badge{position:absolute;top:12px;left:50%;transform:translateX(-50%);font-family:'Space Mono',monospace;font-size:0.7rem;font-weight:700;letter-spacing:0.12em;text-transform:uppercase;padding:4px 14px;border-radius:100px;background:rgba(10,10,16,0.75);border:1px solid rgba(255,255,255,0.15);display:none;white-space:nowrap;z-index:10}
 #status{font-family:'Space Mono',monospace;font-size:0.65rem;text-align:center;opacity:0.4;letter-spacing:0.05em}
 .grid{display:grid;grid-template-columns:repeat(4,1fr);gap:10px}
@@ -55,13 +56,6 @@ input::placeholder{color:rgba(240,237,232,0.3)}
 .mstatus{font-family:'Space Mono',monospace;font-size:0.6rem;opacity:0.45;min-height:1rem}
 .mstatus.ok{color:#1D9E75;opacity:1}
 .mstatus.err{color:#D85A30;opacity:1}
-.panel{border-radius:12px;border:1px solid rgba(255,255,255,0.08);background:#1a1a22;padding:1.1rem 1.25rem}
-.panel-title{font-family:'Space Mono',monospace;font-size:0.6rem;letter-spacing:0.14em;text-transform:uppercase;opacity:0.35;margin-bottom:0.85rem}
-.steps{display:flex;flex-direction:column;gap:0.65rem}
-.step{display:flex;gap:0.75rem;align-items:flex-start;font-size:0.8rem;line-height:1.6;color:rgba(240,237,232,0.6)}
-.sn{min-width:22px;height:22px;border-radius:50%;background:rgba(127,119,221,0.15);border:1px solid rgba(127,119,221,0.3);color:#7F77DD;font-family:'Space Mono',monospace;font-size:0.58rem;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0;margin-top:2px}
-.step a{color:#7F77DD;text-decoration:none;border-bottom:1px solid rgba(127,119,221,0.35)}
-code{font-family:'Space Mono',monospace;font-size:0.66rem;background:rgba(255,255,255,0.07);padding:2px 5px;border-radius:3px}
 </style>
 </head>
 <body>
@@ -72,10 +66,9 @@ code{font-family:'Space Mono',monospace;font-size:0.66rem;background:rgba(255,25
   </div>
 
   <div id="cam-box">
-    <div id="placeholder">
-      <span style="font-size:3rem">🎥</span>
-      <span>Câmara inativa<br>Carrega o modelo e clica em Iniciar</span>
-    </div>
+    <div id="placeholder"><span style="font-size:3rem">🎥</span><span>Câmara inativa<br>Carrega o modelo e clica em Iniciar</span></div>
+    <video id="vid" playsinline muted autoplay style="display:none"></video>
+    <canvas id="cv" style="display:none"></canvas>
     <div id="badge">—</div>
     <div class="bars" id="bars">
       <div class="bar-row"><span class="bar-lbl">Tambor</span><div class="bar-track"><div class="bar-fill" id="bf-tambor" style="background:#D85A30"></div></div><span class="bar-pct" id="bp-tambor">0%</span></div>
@@ -100,23 +93,14 @@ code{font-family:'Space Mono',monospace;font-size:0.66rem;background:rgba(255,25
       <button class="btn btn-load" onclick="loadModel()">Carregar</button>
     </div>
     <p class="mstatus" id="mstatus">Sem modelo carregado</p>
-    <button class="btn btn-start" id="btn-start" onclick="init()">▶ Iniciar Câmara</button>
-  </div>
-
-  <div class="panel">
-    <div class="panel-title">Como usar</div>
-    <div class="steps">
-      <div class="step"><div class="sn">1</div><div>Vai a <a href="https://teachablemachine.withgoogle.com/train/pose" target="_blank">teachablemachine.withgoogle.com/train/pose</a> e treina um modelo com classes: <code>Tambor</code>, <code>Flauta</code>, <code>Guitarra</code>, <code>Violino</code>, <code>Repouso</code></div></div>
-      <div class="step"><div class="sn">2</div><div>Exporta o modelo → copia o URL → cola acima e clica <strong>Carregar</strong></div></div>
-      <div class="step"><div class="sn">3</div><div>Clica <strong>Iniciar Câmara</strong>, afasta-te para aparecer da cabeça à cintura e faz os gestos!</div></div>
-    </div>
+    <button class="btn btn-start" id="btn-start" onclick="startAll()">▶ Iniciar Câmara</button>
   </div>
 </div>
 
+<!-- TF + PoseNet direto, sem wrapper tmPose.Webcam -->
 <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@3.11.0/dist/tf.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@teachablemachine/pose@0.8/dist/teachablemachine-pose.min.js"></script>
 <script>
-// ── Audio ──
 const AC = window.AudioContext || window.webkitAudioContext;
 let actx;
 function ac(){ if(!actx) actx=new AC(); if(actx.state==='suspended') actx.resume(); return actx; }
@@ -134,147 +118,149 @@ const sounds = {
     ng.gain.setValueAtTime(0.3,t); ng.gain.exponentialRampToValueAtTime(0.001,t+0.13);
     ns.connect(ng); ng.connect(c.destination); ns.start(t); ns.stop(t+0.15);
   },
-  flauta: (()=>{ const sc=[523,587,659,698,784,880]; let i=0; return ()=>{
+  flauta:(()=>{const sc=[523,587,659,698,784,880];let i=0;return()=>{
     const c=ac(),t=c.currentTime,f=sc[i++%sc.length];
     const o=c.createOscillator(),g=c.createGain(); o.type='sine'; o.frequency.value=f;
     g.gain.setValueAtTime(0,t); g.gain.linearRampToValueAtTime(0.5,t+0.06); g.gain.linearRampToValueAtTime(0,t+0.42);
     o.connect(g); g.connect(c.destination); o.start(t); o.stop(t+0.45);
   };})(),
-  guitarra: (()=>{ const ch=[[196,247,294,370],[220,277,330,415],[165,208,262,330]]; let i=0; return ()=>{
+  guitarra:(()=>{const ch=[[196,247,294,370],[220,277,330,415],[165,208,262,330]];let i=0;return()=>{
     const c=ac(),t=c.currentTime,ch2=ch[i++%ch.length];
-    ch2.forEach((f,j)=>{ const o=c.createOscillator(),g=c.createGain(); o.type='sawtooth'; o.frequency.value=f;
+    ch2.forEach((f,j)=>{const o=c.createOscillator(),g=c.createGain(); o.type='sawtooth'; o.frequency.value=f;
       g.gain.setValueAtTime(0.18,t+j*0.015); g.gain.exponentialRampToValueAtTime(0.001,t+0.55);
-      o.connect(g); g.connect(c.destination); o.start(t+j*0.015); o.stop(t+0.6); });
+      o.connect(g); g.connect(c.destination); o.start(t+j*0.015); o.stop(t+0.6);});
   };})(),
-  violino: (()=>{ const sc=[659,698,784,880,988]; let i=0; return ()=>{
+  violino:(()=>{const sc=[659,698,784,880,988];let i=0;return()=>{
     const c=ac(),t=c.currentTime,f=sc[i++%sc.length];
-    [1,1.004].forEach(d=>{ const o=c.createOscillator(),g=c.createGain(); o.type='sawtooth'; o.frequency.value=f*d;
+    [1,1.004].forEach(d=>{const o=c.createOscillator(),g=c.createGain(); o.type='sawtooth'; o.frequency.value=f*d;
       const lfo=c.createOscillator(),lg=c.createGain(); lfo.frequency.value=5.5; lg.gain.value=4;
       lfo.connect(lg); lg.connect(o.frequency); lfo.start(t); lfo.stop(t+0.6);
       g.gain.setValueAtTime(0,t); g.gain.linearRampToValueAtTime(0.2,t+0.1); g.gain.linearRampToValueAtTime(0,t+0.55);
-      o.connect(g); g.connect(c.destination); o.start(t); o.stop(t+0.6); });
+      o.connect(g); g.connect(c.destination); o.start(t); o.stop(t+0.6);});
   };})()
 };
 
-// ── TM ──
-let model, webcam, maxPred;
-let running=false, lastK=null, lastT=0;
+let model, running=false, lastK=null, lastT=0;
 const COOL=600;
+const vid=document.getElementById('vid');
+const cv=document.getElementById('cv');
+const ctx2d=cv.getContext('2d',{willReadFrequently:true});
 
 async function loadModel(){
   let url=document.getElementById('url').value.trim();
-  if(!url){ setMS('⚠ Cola o URL primeiro',''); return; }
+  if(!url){setMS('⚠ Cola o URL primeiro','');return;}
   if(!url.endsWith('/')) url+='/';
   setMS('⏳ A carregar modelo…','');
   try{
-    model=await tmPose.load(url+'model.json', url+'metadata.json');
-    maxPred=model.getTotalClasses();
-    setMS(`✓ Modelo carregado — ${maxPred} classes. Clica em Iniciar Câmara!`,'ok');
+    model=await tmPose.load(url+'model.json',url+'metadata.json');
+    setMS(`✓ Modelo carregado — ${model.getTotalClasses()} classes. Clica em Iniciar!`,'ok');
   }catch(e){
     setMS('✗ Erro ao carregar modelo.','err');
     console.error(e);
   }
 }
 
-async function init(){
-  if(!model){ setMS('⚠ Carrega o modelo primeiro!','err'); return; }
+async function startAll(){
+  if(!model){setMS('⚠ Carrega o modelo primeiro!','err');return;}
   if(running) return;
   const btn=document.getElementById('btn-start');
   btn.disabled=true; btn.textContent='⏳ A iniciar…';
 
-  // Usar tmPose.Webcam exatamente como nos exemplos oficiais
-  const size=200;
-  webcam=new tmPose.Webcam(size,size,true);
-  await webcam.setup();
-  await webcam.play();
+  try{
+    const stream=await navigator.mediaDevices.getUserMedia({
+      video:{width:{ideal:640},height:{ideal:480},facingMode:'user'},
+      audio:false
+    });
+    vid.srcObject=stream;
+    await new Promise(res=>{vid.onloadedmetadata=res;});
+    await vid.play();
 
-  document.getElementById('placeholder').style.display='none';
-  document.getElementById('cam-box').appendChild(webcam.canvas);
-  webcam.canvas.style.position='absolute';
-  webcam.canvas.style.inset='0';
-  webcam.canvas.style.width='100%';
-  webcam.canvas.style.height='100%';
-  webcam.canvas.style.objectFit='cover';
+    // canvas sem transformações — o modelo precisa de pixels normais
+    cv.width=vid.videoWidth||640;
+    cv.height=vid.videoHeight||480;
 
-  document.getElementById('bars').style.display='flex';
-  document.getElementById('badge').style.display='block';
-  document.getElementById('status').textContent='IA ativa — faz um gesto!';
-  btn.textContent='● Em tempo real';
-  running=true;
-  window.requestAnimationFrame(loop);
-}
-
-async function loop(ts){
-  webcam.update();
-  await predict();
-  window.requestAnimationFrame(loop);
-}
-
-async function predict(){
-  const {pose, posenetOutput}=await model.estimatePose(webcam.canvas);
-  const preds=await model.predict(posenetOutput);
-
-  let best=null,bestV=0;
-  preds.forEach(p=>{
-    const v=p.probability;
-    const k=norm(p.className);
-    if(v>bestV){bestV=v;best=k;}
-    updateBar(k,v);
-  });
-
-  const badge=document.getElementById('badge');
-  const now=Date.now();
-  const isRest=!best||['repouso','idle','rest','background'].some(r=>best.includes(r));
-
-  if(!isRest && bestV>0.5){
-    badge.textContent=best.toUpperCase();
-    activateCard(best);
-    if(best!==lastK||now-lastT>COOL){
-      playSound(best); lastT=now; lastK=best;
-    }
-  } else {
-    badge.textContent='—'; deactivateAll(); lastK=null;
+    document.getElementById('placeholder').style.display='none';
+    vid.style.display='block';
+    cv.style.display='none'; // canvas só para o modelo, vídeo para mostrar
+    document.getElementById('bars').style.display='flex';
+    document.getElementById('badge').style.display='block';
+    document.getElementById('status').textContent='IA ativa — faz um gesto!';
+    btn.textContent='● Em tempo real';
+    running=true;
+    predLoop();
+  }catch(e){
+    setMS('✗ Erro na câmara: '+e.message,'err');
+    btn.disabled=false; btn.textContent='▶ Iniciar Câmara';
+    console.error(e);
   }
 }
 
-function norm(s){ return s.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').trim(); }
+let busy=false;
+function predLoop(){
+  if(!running) return;
+  if(!busy){
+    busy=true;
+    // desenhar frame actual no canvas (sem flip — o modelo não precisa)
+    ctx2d.drawImage(vid,0,0,cv.width,cv.height);
+    model.estimatePose(cv).then(({pose,posenetOutput})=>{
+      // debug keypoints
+      if(pose){
+        const kps=pose.keypoints.filter(k=>k.score>0.2).length;
+        document.getElementById('status').textContent='Keypoints: '+kps+'/17';
+      }
+      return model.predict(posenetOutput);
+    }).then(preds=>{
+      handlePreds(preds);
+      busy=false;
+    }).catch(e=>{console.error(e);busy=false;});
+  }
+  setTimeout(predLoop,100);
+}
 
-const BF={tambor:'bf-tambor',flauta:'bf-flauta',guitarra:'bf-guitarra',violino:'bf-violino'};
-const BP={tambor:'bp-tambor',flauta:'bp-flauta',guitarra:'bp-guitarra',violino:'bp-violino'};
+function handlePreds(preds){
+  let best=null,bestV=0;
+  preds.forEach(p=>{
+    const v=p.probability,k=norm(p.className);
+    if(v>bestV){bestV=v;best=k;}
+    updateBar(k,v);
+  });
+  const badge=document.getElementById('badge'),now=Date.now();
+  const isRest=!best||['repouso','idle','rest','background','repo'].some(r=>best.includes(r));
+  if(!isRest&&bestV>0.5){
+    badge.textContent=best.toUpperCase();
+    activateCard(best);
+    if(best!==lastK||now-lastT>COOL){playSound(best);lastT=now;lastK=best;}
+  } else {
+    badge.textContent='—';deactivateAll();lastK=null;
+  }
+}
+
+function norm(s){return s.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').trim();}
 
 function updateBar(k,v){
-  const m=Object.keys(BF).find(x=>k.includes(x));
+  const keys={tambor:'tambor',flauta:'flauta',guitarra:'guitarra',violino:'violino'};
+  const m=Object.keys(keys).find(x=>k.includes(x));
   if(!m) return;
-  document.getElementById(BF[m]).style.width=Math.round(v*100)+'%';
-  document.getElementById(BP[m]).textContent=Math.round(v*100)+'%';
+  document.getElementById('bf-'+m).style.width=Math.round(v*100)+'%';
+  document.getElementById('bp-'+m).textContent=Math.round(v*100)+'%';
 }
 
 function activateCard(k){
   deactivateAll();
-  const m=Object.keys(BF).find(x=>k.includes(x));
+  const m=['tambor','flauta','guitarra','violino'].find(x=>k.includes(x));
   if(m) document.getElementById('c-'+m).classList.add('active');
 }
-function deactivateAll(){ ['tambor','flauta','guitarra','violino'].forEach(k=>document.getElementById('c-'+k).classList.remove('active')); }
+function deactivateAll(){['tambor','flauta','guitarra','violino'].forEach(k=>document.getElementById('c-'+k).classList.remove('active'));}
+function playSound(k){const m=Object.keys(sounds).find(x=>k.includes(x));if(m)sounds[m]();}
+function setMS(msg,cls){const el=document.getElementById('mstatus');el.textContent=msg;el.className='mstatus '+cls;}
 
-function playSound(k){
-  const m=Object.keys(sounds).find(x=>k.includes(x));
-  if(m) sounds[m]();
-}
-
-function setMS(msg,cls){
-  const el=document.getElementById('mstatus');
-  el.textContent=msg; el.className='mstatus '+cls;
-}
-
-// Demo mode nos cards
 ['tambor','flauta','guitarra','violino'].forEach(k=>{
   document.getElementById('c-'+k).addEventListener('click',()=>{
     if(running) return;
-    activateCard(k); sounds[k](); setTimeout(deactivateAll,700);
+    activateCard(k);sounds[k]();setTimeout(deactivateAll,700);
   });
 });
 
-// Auto-carregar modelo
 loadModel();
 </script>
 </body>
