@@ -1,0 +1,960 @@
+<!DOCTYPE html>
+<html lang="pt">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>✦ Air Band — Teachable Machine</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;700;800&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --drum: #D85A30;
+    --flute: #1D9E75;
+    --guitar: #BA7517;
+    --violin: #7F77DD;
+    --bg: #0e0e12;
+    --surface: #1a1a22;
+    --surface2: #22222e;
+    --border: rgba(255,255,255,0.08);
+    --text: #f0ede8;
+    --muted: rgba(240,237,232,0.45);
+  }
+
+  html, body {
+    height: 100%;
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Syne', sans-serif;
+  }
+
+  body {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 2rem 1rem 3rem;
+    min-height: 100vh;
+  }
+
+  /* Grain overlay */
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='1'/%3E%3C/svg%3E");
+    opacity: 0.025;
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  #app {
+    width: 100%;
+    max-width: 700px;
+    display: flex;
+    flex-direction: column;
+    gap: 1.5rem;
+    position: relative;
+    z-index: 1;
+  }
+
+  /* HEADER */
+  .header { text-align: center; padding: 1rem 0 0.5rem; }
+
+  .header h1 {
+    font-size: 2.8rem;
+    font-weight: 800;
+    letter-spacing: -0.04em;
+    line-height: 0.95;
+    background: linear-gradient(135deg, #f0ede8 20%, #7F77DD 70%, #D85A30);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+
+  .header .subtitle {
+    font-family: 'Space Mono', monospace;
+    font-size: 0.68rem;
+    color: var(--muted);
+    margin-top: 0.6rem;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+  }
+
+  /* CAMERA ZONE */
+  .cam-zone {
+    position: relative;
+    border-radius: 20px;
+    overflow: hidden;
+    border: 1px solid var(--border);
+    background: #0a0a10;
+    aspect-ratio: 4/3;
+    width: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  #webcam-container {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  #webcam-container canvas {
+    width: 100% !important;
+    height: 100% !important;
+    object-fit: cover;
+    transform: scaleX(-1);
+  }
+
+  /* Corner brackets */
+  .cam-zone::before, .cam-zone::after,
+  .bracket-bl, .bracket-br {
+    content: '';
+    position: absolute;
+    width: 28px;
+    height: 28px;
+    border-color: rgba(240,237,232,0.25);
+    border-style: solid;
+    z-index: 10;
+    pointer-events: none;
+  }
+  .cam-zone::before { top: 14px; left: 14px; border-width: 2px 0 0 2px; border-radius: 5px 0 0 0; }
+  .cam-zone::after  { top: 14px; right: 14px; border-width: 2px 2px 0 0; border-radius: 0 5px 0 0; }
+  .bracket-bl { bottom: 14px; left: 14px; border-width: 0 0 2px 2px; border-radius: 0 0 0 5px; }
+  .bracket-br { bottom: 14px; right: 14px; border-width: 0 2px 2px 0; border-radius: 0 0 5px 0; }
+
+  .cam-placeholder {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 1rem;
+    opacity: 0.35;
+    font-family: 'Space Mono', monospace;
+    font-size: 0.75rem;
+    text-align: center;
+    padding: 2rem;
+    z-index: 5;
+  }
+
+  .cam-placeholder .icon-cam {
+    font-size: 3.5rem;
+    display: block;
+    filter: grayscale(1);
+  }
+
+  /* Badge top */
+  #instrument-badge {
+    position: absolute;
+    top: 14px;
+    left: 50%;
+    transform: translateX(-50%);
+    font-family: 'Space Mono', monospace;
+    font-size: 0.72rem;
+    font-weight: 700;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    padding: 5px 16px;
+    border-radius: 100px;
+    background: rgba(10,10,16,0.75);
+    border: 1px solid rgba(255,255,255,0.15);
+    backdrop-filter: blur(12px);
+    transition: all 0.25s ease;
+    opacity: 0;
+    white-space: nowrap;
+    z-index: 10;
+  }
+
+  /* Confidence bars */
+  .conf-wrap {
+    position: absolute;
+    bottom: 14px;
+    left: 14px;
+    right: 14px;
+    display: none;
+    flex-direction: column;
+    gap: 6px;
+    z-index: 10;
+    background: rgba(10,10,16,0.6);
+    backdrop-filter: blur(8px);
+    border-radius: 10px;
+    padding: 10px 12px;
+    border: 1px solid var(--border);
+  }
+
+  .conf-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .conf-lbl {
+    font-family: 'Space Mono', monospace;
+    font-size: 0.6rem;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+    width: 56px;
+    text-align: right;
+    opacity: 0.55;
+    flex-shrink: 0;
+  }
+
+  .conf-track {
+    flex: 1;
+    height: 3px;
+    background: rgba(255,255,255,0.07);
+    border-radius: 2px;
+    overflow: hidden;
+  }
+
+  .conf-fill {
+    height: 100%;
+    border-radius: 2px;
+    width: 0%;
+    transition: width 0.1s ease;
+  }
+
+  .conf-pct {
+    font-family: 'Space Mono', monospace;
+    font-size: 0.58rem;
+    opacity: 0.4;
+    width: 28px;
+    text-align: right;
+    flex-shrink: 0;
+  }
+
+  /* Visualizer ripple on camera */
+  #ripple {
+    position: absolute;
+    width: 0; height: 0;
+    border-radius: 50%;
+    border: 2px solid transparent;
+    top: 50%; left: 50%;
+    transform: translate(-50%, -50%);
+    pointer-events: none;
+    z-index: 8;
+    transition: border-color 0.2s;
+  }
+
+  @keyframes ripple-anim {
+    0%   { width: 60px; height: 60px; opacity: 0.8; }
+    100% { width: 300px; height: 300px; opacity: 0; }
+  }
+
+  .ripple-go {
+    animation: ripple-anim 0.6s ease-out forwards;
+  }
+
+  /* INSTRUMENTS GRID */
+  .instruments-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 12px;
+  }
+
+  .instr-card {
+    border-radius: 14px;
+    border: 1px solid var(--border);
+    background: var(--surface);
+    padding: 1.1rem 0.5rem 0.9rem;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.5rem;
+    cursor: pointer;
+    transition: border-color 0.2s ease, transform 0.15s ease, background 0.2s;
+    position: relative;
+    overflow: hidden;
+    user-select: none;
+  }
+
+  .instr-card:hover { background: var(--surface2); border-color: rgba(255,255,255,0.15); }
+
+  .instr-card::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    opacity: 0;
+    transition: opacity 0.2s;
+  }
+
+  .instr-card[data-c="drum"]::after    { background: var(--drum); }
+  .instr-card[data-c="flute"]::after   { background: var(--flute); }
+  .instr-card[data-c="guitar"]::after  { background: var(--guitar); }
+  .instr-card[data-c="violin"]::after  { background: var(--violin); }
+
+  .instr-card.active {
+    transform: scale(1.05);
+  }
+  .instr-card.active::after { opacity: 0.1; }
+  .instr-card[data-c="drum"].active    { border-color: var(--drum); }
+  .instr-card[data-c="flute"].active   { border-color: var(--flute); }
+  .instr-card[data-c="guitar"].active  { border-color: var(--guitar); }
+  .instr-card[data-c="violin"].active  { border-color: var(--violin); }
+
+  .instr-emoji {
+    font-size: 2.2rem;
+    line-height: 1;
+    transition: transform 0.15s;
+    position: relative;
+    z-index: 1;
+  }
+
+  .instr-card.active .instr-emoji {
+    animation: pop 0.3s ease;
+  }
+
+  @keyframes pop {
+    0%   { transform: scale(1); }
+    45%  { transform: scale(1.3) rotate(-5deg); }
+    100% { transform: scale(1); }
+  }
+
+  .instr-name {
+    font-family: 'Space Mono', monospace;
+    font-size: 0.62rem;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    opacity: 0.5;
+    transition: opacity 0.2s, color 0.2s;
+    position: relative;
+    z-index: 1;
+  }
+
+  .instr-card[data-c="drum"].active  .instr-name { opacity: 1; color: var(--drum); }
+  .instr-card[data-c="flute"].active .instr-name { opacity: 1; color: var(--flute); }
+  .instr-card[data-c="guitar"].active .instr-name { opacity: 1; color: var(--guitar); }
+  .instr-card[data-c="violin"].active .instr-name { opacity: 1; color: var(--violin); }
+
+  .instr-hint {
+    font-size: 0.53rem;
+    opacity: 0.28;
+    text-align: center;
+    font-family: 'Space Mono', monospace;
+    line-height: 1.4;
+    position: relative;
+    z-index: 1;
+  }
+
+  .instr-card.active .instr-hint { opacity: 0.55; }
+
+  /* CONTROLS */
+  .controls {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+
+  .url-row {
+    display: flex;
+    gap: 8px;
+  }
+
+  input[type="text"] {
+    flex: 1;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    color: var(--text);
+    font-family: 'Space Mono', monospace;
+    font-size: 0.7rem;
+    padding: 0.65rem 0.9rem;
+    outline: none;
+    transition: border-color 0.2s;
+  }
+
+  input[type="text"]:focus { border-color: rgba(127,119,221,0.5); }
+  input[type="text"]::placeholder { color: var(--muted); }
+
+  .btn {
+    padding: 0.65rem 1.1rem;
+    border: none;
+    border-radius: 10px;
+    font-family: 'Syne', sans-serif;
+    font-size: 0.88rem;
+    font-weight: 700;
+    cursor: pointer;
+    transition: all 0.15s ease;
+    white-space: nowrap;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+  }
+
+  .btn-primary {
+    background: #7F77DD;
+    color: #fff;
+  }
+  .btn-primary:hover { background: #534AB7; }
+  .btn-primary:active { transform: scale(0.97); }
+  .btn-primary:disabled { background: #333; color: #555; cursor: default; }
+
+  .btn-start {
+    width: 100%;
+    justify-content: center;
+    padding: 0.9rem;
+    font-size: 1rem;
+    background: linear-gradient(135deg, #7F77DD, #534AB7);
+    color: #fff;
+  }
+
+  .btn-start:hover { background: linear-gradient(135deg, #534AB7, #3C3489); }
+  .btn-start:disabled { background: var(--surface); color: #555; cursor: default; }
+
+  .model-status {
+    font-family: 'Space Mono', monospace;
+    font-size: 0.62rem;
+    opacity: 0.45;
+    min-height: 1rem;
+    padding-left: 2px;
+  }
+
+  .model-status.ok  { color: var(--flute); opacity: 0.85; }
+  .model-status.err { color: var(--drum); opacity: 0.85; }
+
+  /* INSTRUCTIONS PANEL */
+  .panel {
+    border-radius: 14px;
+    border: 1px solid var(--border);
+    background: var(--surface);
+    padding: 1.25rem 1.4rem;
+  }
+
+  .panel-title {
+    font-family: 'Space Mono', monospace;
+    font-size: 0.63rem;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    opacity: 0.35;
+    margin-bottom: 1rem;
+  }
+
+  .steps { display: flex; flex-direction: column; gap: 0.75rem; }
+
+  .step {
+    display: flex;
+    gap: 0.8rem;
+    align-items: flex-start;
+    font-size: 0.82rem;
+    line-height: 1.6;
+    color: rgba(240,237,232,0.65);
+  }
+
+  .step-n {
+    min-width: 24px;
+    height: 24px;
+    border-radius: 50%;
+    background: rgba(127,119,221,0.15);
+    border: 1px solid rgba(127,119,221,0.3);
+    color: #7F77DD;
+    font-family: 'Space Mono', monospace;
+    font-size: 0.6rem;
+    font-weight: 700;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    margin-top: 2px;
+  }
+
+  .step a {
+    color: #7F77DD;
+    text-decoration: none;
+    border-bottom: 1px solid rgba(127,119,221,0.35);
+  }
+
+  .step a:hover { border-color: #7F77DD; }
+
+  code {
+    font-family: 'Space Mono', monospace;
+    font-size: 0.68rem;
+    background: rgba(255,255,255,0.07);
+    padding: 2px 6px;
+    border-radius: 4px;
+  }
+
+  /* GESTURES TABLE */
+  .gestures-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 8px;
+    margin-top: 0.5rem;
+  }
+
+  .gesture-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    background: var(--surface2);
+    border-radius: 10px;
+    padding: 0.6rem 0.8rem;
+    border: 1px solid var(--border);
+    font-size: 0.78rem;
+    color: rgba(240,237,232,0.65);
+  }
+
+  .gesture-item span:first-child { font-size: 1.4rem; flex-shrink: 0; }
+
+  .gesture-desc { font-size: 0.7rem; opacity: 0.75; }
+
+  /* STATUS */
+  #status-line {
+    font-family: 'Space Mono', monospace;
+    font-size: 0.65rem;
+    text-align: center;
+    opacity: 0.35;
+    letter-spacing: 0.06em;
+  }
+
+  /* DEMO HINT */
+  .demo-hint {
+    text-align: center;
+    font-family: 'Space Mono', monospace;
+    font-size: 0.62rem;
+    opacity: 0.35;
+    letter-spacing: 0.05em;
+  }
+
+  @media (max-width: 480px) {
+    .instruments-grid { grid-template-columns: repeat(2, 1fr); }
+    .gestures-grid { grid-template-columns: 1fr; }
+    .header h1 { font-size: 2rem; }
+  }
+</style>
+</head>
+<body>
+
+<div id="app">
+
+  <div class="header">
+    <h1>✦ Air Band</h1>
+    <p class="subtitle">Teachable Machine · Gestos → Música · Projeto STEAM 12–17 anos</p>
+  </div>
+
+  <!-- CAMERA -->
+  <div class="cam-zone" id="cam-zone">
+    <div class="bracket-bl"></div>
+    <div class="bracket-br"></div>
+    <div id="webcam-container">
+      <div class="cam-placeholder" id="cam-placeholder">
+        <span class="icon-cam">🎥</span>
+        <span>Câmara inativa<br>Carrega o modelo e clica em Iniciar</span>
+      </div>
+    </div>
+    <div id="instrument-badge">—</div>
+    <div id="ripple"></div>
+    <div class="conf-wrap" id="conf-wrap">
+      <div class="conf-row">
+        <span class="conf-lbl">Tambor</span>
+        <div class="conf-track"><div class="conf-fill" id="cf-tambor" style="background:var(--drum)"></div></div>
+        <span class="conf-pct" id="cp-tambor">0%</span>
+      </div>
+      <div class="conf-row">
+        <span class="conf-lbl">Flauta</span>
+        <div class="conf-track"><div class="conf-fill" id="cf-flauta" style="background:var(--flute)"></div></div>
+        <span class="conf-pct" id="cp-flauta">0%</span>
+      </div>
+      <div class="conf-row">
+        <span class="conf-lbl">Guitarra</span>
+        <div class="conf-track"><div class="conf-fill" id="cf-guitarra" style="background:var(--guitar)"></div></div>
+        <span class="conf-pct" id="cp-guitarra">0%</span>
+      </div>
+      <div class="conf-row">
+        <span class="conf-lbl">Violino</span>
+        <div class="conf-track"><div class="conf-fill" id="cf-violino" style="background:var(--violin)"></div></div>
+        <span class="conf-pct" id="cp-violino">0%</span>
+      </div>
+    </div>
+  </div>
+
+  <div id="status-line">Insere o URL do modelo ou experimenta o modo demo clicando nos instrumentos</div>
+
+  <!-- INSTRUMENTS -->
+  <div class="instruments-grid">
+    <div class="instr-card" data-c="drum" id="card-tambor">
+      <div class="instr-emoji">🥁</div>
+      <div class="instr-name">Tambor</div>
+      <div class="instr-hint">Bate os braços<br>no ar</div>
+    </div>
+    <div class="instr-card" data-c="flute" id="card-flauta">
+      <div class="instr-emoji">🎵</div>
+      <div class="instr-name">Flauta</div>
+      <div class="instr-hint">Mãos ao nível<br>da boca</div>
+    </div>
+    <div class="instr-card" data-c="guitar" id="card-guitarra">
+      <div class="instr-emoji">🎸</div>
+      <div class="instr-name">Guitarra</div>
+      <div class="instr-hint">Raspa o ar<br>com o braço</div>
+    </div>
+    <div class="instr-card" data-c="violin" id="card-violino">
+      <div class="instr-emoji">🎻</div>
+      <div class="instr-name">Violino</div>
+      <div class="instr-hint">Movimento<br>do arco</div>
+    </div>
+  </div>
+
+  <!-- CONTROLS -->
+  <div class="controls">
+    <div class="url-row">
+      <input type="text" id="model-url" placeholder="URL do modelo Teachable Machine (ex: https://teachablemachine.withgoogle.com/models/XXXX/)">
+      <button class="btn btn-primary" onclick="loadModel()">Carregar</button>
+    </div>
+    <div class="model-status" id="model-status">Sem modelo carregado — clica nos instrumentos para modo demo</div>
+    <button class="btn btn-start" id="start-btn" onclick="startCamera()">
+      ▶ Iniciar Câmara
+    </button>
+  </div>
+
+  <!-- GESTURES -->
+  <div class="panel">
+    <div class="panel-title">Gestos para treinar no Teachable Machine</div>
+    <div class="gestures-grid">
+      <div class="gesture-item">
+        <span>🥁</span>
+        <div>
+          <div><strong>Tambor</strong></div>
+          <div class="gesture-desc">Braços dobrados, bater alternadamente no ar para baixo</div>
+        </div>
+      </div>
+      <div class="gesture-item">
+        <span>🎵</span>
+        <div>
+          <div><strong>Flauta</strong></div>
+          <div class="gesture-desc">Ambas as mãos levantadas horizontalmente ao nível da boca</div>
+        </div>
+      </div>
+      <div class="gesture-item">
+        <span>🎸</span>
+        <div>
+          <div><strong>Guitarra</strong></div>
+          <div class="gesture-desc">Uma mão segura o "braço", a outra raspa verticalmente</div>
+        </div>
+      </div>
+      <div class="gesture-item">
+        <span>🎻</span>
+        <div>
+          <div><strong>Violino</strong></div>
+          <div class="gesture-desc">Um braço segura junto ao queixo, o outro faz arco lateral</div>
+        </div>
+      </div>
+    </div>
+    <div style="margin-top: 0.8rem; font-size: 0.72rem; opacity: 0.4; font-family: 'Space Mono', monospace; text-align:center;">
+      + Classe "Repouso" — braços ao longo do corpo (sem instrumento)
+    </div>
+  </div>
+
+  <!-- HOW TO -->
+  <div class="panel">
+    <div class="panel-title">Como usar este projeto passo a passo</div>
+    <div class="steps">
+      <div class="step">
+        <div class="step-n">1</div>
+        <div>Vai a <a href="https://teachablemachine.withgoogle.com/train/pose" target="_blank">teachablemachine.withgoogle.com/train/pose</a> e cria um projeto de <strong>Pose</strong> com 5 classes: <code>Tambor</code>, <code>Flauta</code>, <code>Guitarra</code>, <code>Violino</code> e <code>Repouso</code>.</div>
+      </div>
+      <div class="step">
+        <div class="step-n">2</div>
+        <div>Para cada classe, grava <strong>50 a 80 exemplos</strong> com variações de distância e ângulo. Pede a vários colegas para gravarem o mesmo gesto para o modelo ser mais robusto.</div>
+      </div>
+      <div class="step">
+        <div class="step-n">3</div>
+        <div>Clica em <strong>Treinar Modelo</strong> (demora 1–2 minutos). Depois experimenta ao vivo no painel de pré-visualização do Teachable Machine.</div>
+      </div>
+      <div class="step">
+        <div class="step-n">4</div>
+        <div>Clica em <strong>Exportar Modelo → Upload (alojado)</strong> e copia o URL gerado (começa com <code>https://teachablemachine.withgoogle.com/models/</code>).</div>
+      </div>
+      <div class="step">
+        <div class="step-n">5</div>
+        <div>Cola o URL no campo acima, clica em <strong>Carregar</strong> e depois em <strong>Iniciar Câmara</strong> — e toca! A IA reconhece o gesto e toca o instrumento em tempo real.</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="demo-hint">💡 Sem modelo? Clica nos instrumentos para ouvir os sons e testar</div>
+
+</div>
+
+<!-- LIBS -->
+<script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@3.11.0/dist/tf.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@teachablemachine/pose@0.8/dist/teachablemachine-pose.min.js"></script>
+
+<script>
+/* ── Audio Engine ── */
+const AC = window.AudioContext || window.webkitAudioContext;
+let audioCtx;
+
+function ctx() {
+  if (!audioCtx) audioCtx = new AC();
+  if (audioCtx.state === 'suspended') audioCtx.resume();
+  return audioCtx;
+}
+
+const sounds = {
+  tambor: () => {
+    const c = ctx(), t = c.currentTime;
+    // Kick body
+    const o = c.createOscillator(), g = c.createGain();
+    o.connect(g); g.connect(c.destination);
+    o.type = 'sine';
+    o.frequency.setValueAtTime(180, t);
+    o.frequency.exponentialRampToValueAtTime(45, t + 0.18);
+    g.gain.setValueAtTime(1.2, t);
+    g.gain.exponentialRampToValueAtTime(0.001, t + 0.28);
+    o.start(t); o.stop(t + 0.3);
+    // Snare noise
+    const buf = c.createBuffer(1, c.sampleRate * 0.15, c.sampleRate);
+    const d = buf.getChannelData(0);
+    for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
+    const ns = c.createBufferSource(), ng = c.createGain();
+    ns.buffer = buf;
+    ns.connect(ng); ng.connect(c.destination);
+    ng.gain.setValueAtTime(0.35, t);
+    ng.gain.exponentialRampToValueAtTime(0.001, t + 0.14);
+    ns.start(t); ns.stop(t + 0.15);
+  },
+
+  flauta: (() => {
+    const scale = [523.25, 587.33, 659.25, 698.46, 783.99, 880, 987.77];
+    let idx = 0;
+    return () => {
+      const c = ctx(), t = c.currentTime;
+      const freq = scale[idx++ % scale.length];
+      const o = c.createOscillator(), g = c.createGain();
+      // Breathy tone: mix sine + a tiny bit of noise
+      o.type = 'sine';
+      o.frequency.setValueAtTime(freq, t);
+      o.frequency.linearRampToValueAtTime(freq * 1.003, t + 0.05);
+      g.gain.setValueAtTime(0, t);
+      g.gain.linearRampToValueAtTime(0.55, t + 0.06);
+      g.gain.setValueAtTime(0.5, t + 0.28);
+      g.gain.linearRampToValueAtTime(0, t + 0.42);
+      o.connect(g); g.connect(c.destination);
+      o.start(t); o.stop(t + 0.45);
+    };
+  })(),
+
+  guitarra: (() => {
+    const chords = [
+      [196, 247, 294, 370],
+      [220, 277, 330, 415],
+      [165, 208, 262, 330],
+      [247, 311, 370, 466],
+    ];
+    let idx = 0;
+    return () => {
+      const c = ctx(), t = c.currentTime;
+      const chord = chords[idx++ % chords.length];
+      chord.forEach((freq, i) => {
+        const o = c.createOscillator(), g = c.createGain();
+        o.type = 'sawtooth';
+        o.frequency.value = freq;
+        // Pluck envelope
+        g.gain.setValueAtTime(0.22, t + i * 0.018);
+        g.gain.exponentialRampToValueAtTime(0.001, t + 0.55);
+        o.connect(g); g.connect(c.destination);
+        o.start(t + i * 0.018); o.stop(t + 0.6);
+      });
+    };
+  })(),
+
+  violino: (() => {
+    const notes = [659.25, 698.46, 783.99, 880, 987.77, 1046.5];
+    let idx = 0;
+    return () => {
+      const c = ctx(), t = c.currentTime;
+      const freq = notes[idx++ % notes.length];
+      // Bowed: two slightly detuned saws with tremolo
+      [1, 1.004].forEach(det => {
+        const o = c.createOscillator(), g = c.createGain();
+        o.type = 'sawtooth';
+        o.frequency.value = freq * det;
+        // Vibrato via LFO
+        const lfo = c.createOscillator(), lfoGain = c.createGain();
+        lfo.frequency.value = 5.5;
+        lfoGain.gain.value = 4;
+        lfo.connect(lfoGain); lfoGain.connect(o.frequency);
+        lfo.start(t); lfo.stop(t + 0.6);
+        // Amp envelope
+        g.gain.setValueAtTime(0, t);
+        g.gain.linearRampToValueAtTime(0.22, t + 0.1);
+        g.gain.linearRampToValueAtTime(0.18, t + 0.4);
+        g.gain.linearRampToValueAtTime(0, t + 0.58);
+        o.connect(g); g.connect(c.destination);
+        o.start(t); o.stop(t + 0.6);
+      });
+    };
+  })()
+};
+
+/* ── Teachable Machine ── */
+let model, webcam, maxPredictions;
+let running = false;
+let lastClass = null, lastSoundAt = 0;
+const COOLDOWN = 550;
+let modelReady = false;
+
+async function loadModel() {
+  let url = document.getElementById('model-url').value.trim();
+  if (!url) { setStatus('⚠ Cola o URL do modelo primeiro.', ''); return; }
+  if (!url.endsWith('/')) url += '/';
+  setStatus('⏳ A carregar modelo…', '');
+  try {
+    model = await tmPose.load(url + 'model.json', url + 'metadata.json');
+    maxPredictions = model.getTotalClasses();
+    modelReady = true;
+    setStatus(`✓ Modelo carregado — ${maxPredictions} classes detetadas. Clica em Iniciar Câmara!`, 'ok');
+  } catch(e) {
+    setStatus('✗ Erro ao carregar. Confirma o URL e que o modelo é público.', 'err');
+    console.error(e);
+  }
+}
+
+async function startCamera() {
+  if (running) return;
+  const btn = document.getElementById('start-btn');
+
+  if (!modelReady) {
+    setStatus('Modo demo ativo — clica nos instrumentos para tocar!', '');
+    btn.textContent = '✓ Modo demo';
+    btn.disabled = true;
+    enableDemoMode();
+    return;
+  }
+
+  btn.disabled = true;
+  btn.textContent = '⏳ A iniciar câmara…';
+
+  try {
+    const size = 224;
+    webcam = new tmPose.Webcam(size, size, true);
+    await webcam.setup();
+    await webcam.play();
+
+    document.getElementById('cam-placeholder').style.display = 'none';
+    document.getElementById('webcam-container').appendChild(webcam.canvas);
+    document.getElementById('conf-wrap').style.display = 'flex';
+    document.getElementById('instrument-badge').style.opacity = '1';
+    document.getElementById('status-line').textContent = 'IA ativa — faz um gesto!';
+
+    btn.textContent = '● A correr em tempo real';
+    running = true;
+    loop();
+  } catch(e) {
+    setStatus('✗ Não foi possível aceder à câmara. Confirma as permissões do browser.', 'err');
+    btn.disabled = false;
+    btn.textContent = '▶ Iniciar Câmara';
+    console.error(e);
+  }
+}
+
+async function loop() {
+  webcam.update();
+  await predict();
+  if (running) requestAnimationFrame(loop);
+}
+
+async function predict() {
+  const { posenetOutput } = await model.estimatePose(webcam.canvas);
+  const preds = await model.predict(posenetOutput);
+
+  let best = null, bestVal = 0;
+  preds.forEach(p => {
+    const v = p.probability;
+    const k = normalize(p.className);
+    if (v > bestVal) { bestVal = v; best = k; }
+    updateBar(k, v);
+  });
+
+  const badge = document.getElementById('instrument-badge');
+  const now = Date.now();
+  const isRest = !best || best === 'repouso' || best === 'idle' || best === 'rest';
+
+  if (!isRest && bestVal > 0.75) {
+    badge.textContent = best.toUpperCase();
+    activateCard(best);
+    if (best !== lastClass || now - lastSoundAt > COOLDOWN) {
+      triggerSound(best);
+      lastSoundAt = now;
+      lastClass = best;
+    }
+  } else {
+    badge.textContent = '—';
+    deactivateAll();
+    lastClass = null;
+  }
+}
+
+/* ── Helpers ── */
+function normalize(name) {
+  return name.toLowerCase()
+    .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+    .trim();
+}
+
+const barIds = { tambor: 'cf-tambor', flauta: 'cf-flauta', guitarra: 'cf-guitarra', violino: 'cf-violino' };
+const pctIds = { tambor: 'cp-tambor', flauta: 'cp-flauta', guitarra: 'cp-guitarra', violino: 'cp-violino' };
+
+function updateBar(key, val) {
+  const match = Object.keys(barIds).find(k => key.includes(k));
+  if (!match) return;
+  document.getElementById(barIds[match]).style.width = Math.round(val * 100) + '%';
+  document.getElementById(pctIds[match]).textContent = Math.round(val * 100) + '%';
+}
+
+const cardIds = { tambor: 'card-tambor', flauta: 'card-flauta', guitarra: 'card-guitarra', violino: 'card-violino' };
+
+function activateCard(key) {
+  deactivateAll();
+  const match = Object.keys(cardIds).find(k => key.includes(k));
+  if (match) document.getElementById(cardIds[match]).classList.add('active');
+}
+
+function deactivateAll() {
+  Object.values(cardIds).forEach(id => document.getElementById(id).classList.remove('active'));
+}
+
+function triggerSound(key) {
+  const match = Object.keys(sounds).find(k => key.includes(k));
+  if (match) {
+    sounds[match]();
+    fireRipple(match);
+  }
+}
+
+const rippleColors = { tambor: '#D85A30', flauta: '#1D9E75', guitarra: '#BA7517', violino: '#7F77DD' };
+
+function fireRipple(key) {
+  const r = document.getElementById('ripple');
+  r.style.borderColor = rippleColors[key] || '#fff';
+  r.classList.remove('ripple-go');
+  void r.offsetWidth;
+  r.classList.add('ripple-go');
+}
+
+function setStatus(msg, cls) {
+  const el = document.getElementById('model-status');
+  el.textContent = msg;
+  el.className = 'model-status ' + cls;
+}
+
+function enableDemoMode() {
+  Object.keys(cardIds).forEach(k => {
+    const card = document.getElementById(cardIds[k]);
+    card.style.cursor = 'pointer';
+    card.addEventListener('click', () => {
+      activateCard(k);
+      sounds[k]();
+      fireRipple(k);
+      setTimeout(deactivateAll, 700);
+    });
+  });
+}
+
+/* Demo mode always available on instrument cards */
+enableDemoMode();
+</script>
+</body>
+</html>
